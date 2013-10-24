@@ -13,8 +13,10 @@ and create a pid file. While the program runs, it consumes its output
 (stdout and stderr) and write to a log file.
 
 It also handles all signals (SIGINT, SIGTERM, etc) and forward them to the
-child process. On SIGHUP, **god** recycles its log file making it easy to
-integrate with logrotate.
+program being managed. On SIGHUP, **god** recycles its log file making it
+easy to integrate with logrotate. If SIGHUP is not supported by your program
+**god** can handle it without forwarding the signal and making the program
+immune to hangups using the *--nohup* command line option.
 
 The command line look like this:
 
