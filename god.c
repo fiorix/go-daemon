@@ -58,14 +58,12 @@ int main(int argc, char **argv) {
 	char rundir[PATH_MAX];
 	char user[64];
 	char group[64];
-	char command[1024];
 
 	memset(logfile, 0, sizeof logfile);
 	memset(pidfile, 0, sizeof pidfile);
 	memset(rundir, 0, sizeof rundir);
 	memset(user, 0, sizeof user);
 	memset(group, 0, sizeof group);
-	memset(command, 0, sizeof command);
 
 	static struct option opts[] = {
 		{ "help",     no_argument,       NULL, 'h' },
