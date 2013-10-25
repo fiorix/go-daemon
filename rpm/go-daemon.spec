@@ -1,3 +1,5 @@
+%define debug_package %{nil}
+
 Summary: Daemonize other programs
 Name: go-daemon
 Version: 1.0
@@ -7,6 +9,7 @@ Group: Utilities
 URL: http://github.com/fiorix/go-daemon
 Packager: Alexandre Fiori <fiorix@gmail.com>
 Source: %{name}-%{version}.tar.gz
+BuildRoot: %{_tmpdir}/%{name}-%{version}-%{release}
 BuildRequires: gcc
 BuildRequires: make
 
