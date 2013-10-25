@@ -42,7 +42,6 @@ static int nohup = 0;
 static int logfd[2]; // pipe
 static pid_t childpid = 0;
 static FILE *logfp = NULL;
-static FILE *pidfp = NULL;
 static char logfile[PATH_MAX];
 static char linebuf[1024];
 static struct passwd *pwd = NULL;
@@ -140,6 +139,7 @@ int main(int argc, char **argv) {
 	if (logfp)
 		setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
 
+	FILE *pidfp = NULL;
 	if (*pidfile != 0 && (pidfp = fopen(pidfile, "w+")) == NULL) {
 		perror("failed to open pidfile");
 		return 1;
@@ -163,6 +163,10 @@ int main(int argc, char **argv) {
 		waitpid(pid, NULL, 0);
 	} else if (!pid) {
 		if ((pid = fork())) {
+			if (pidfp) {
+				fprintf(pidfp, "%d\n", pid);
+				fclose(pidfp);
+			}
 			exit(0);
 		} else if (!pid) {
 			daemon_main(optind, argv);
@@ -196,10 +200,6 @@ void daemon_main(int optind, char **argv) {
 		pthread_join(logth, NULL);
 		waitpid(childpid, NULL, 0);
 	} else if (!childpid) {
-		if (pidfp) {
-			fprintf(pidfp, "%d\n", getpid());
-			fclose(pidfp);
-		}
 		close(logfd[0]);
 		close(0);
 		close(1);
