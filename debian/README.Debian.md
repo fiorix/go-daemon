@@ -8,16 +8,16 @@ the source code, available at http://github.com/fiorix/go-daemon.
 
 ## Building the debian package
 
-1. Install dependencies
+1. Install dependencies:
 
 	apt-get install build-essential debhelper dh-make fakeroot
 
-2. Build the package
+2. Build the package:
 
 	cd go-daemon
 	dpkg-buildpackage -rfakeroot
 
-3. Install it
+3. Install it:
 
 	cd ..
 	dpkg -i go-daemon_1.0-1_<arch>.deb
