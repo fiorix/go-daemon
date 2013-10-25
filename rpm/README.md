@@ -22,7 +22,7 @@ and might work on other rpm-based distros.
 
 	cp -r go-daemon go-daemon-1.0
 	tar czvf ~/rpmbuild/SOURCES/go-daemon-1.0.tar.gz go-daemon-1.0
-	cp go-daemon/rpmbuild/go-daemon.spec ~/rpmbuild/SPECS
+	cp go-daemon/rpm/go-daemon.spec ~/rpmbuild/SPECS
 
 4. Build the package
 
