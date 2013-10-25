@@ -1,22 +1,22 @@
 # Go daemon
 
-Go daemon (or just **god**) is a command line tool to "daemonize" programs
+Go daemon (or just **god**) is a utility to "daemonize" Go programs
 that originally only run in foreground and write logs to the console.
 
-Go daemon can turn these programs into daemons, managing essential aspects of
-their execution. The process of making a program become a daemon has very
+Go daemon can turn these programs into daemons by managing essential aspects
+of their execution. The process of making a program become a daemon has very
 peculiar steps and can be done outside the code. This is what **god** is for.
 
 It executes a program for you doing things that daemons do: switch to another
 user and group, switch the directory of execution, detach from the terminal
-and create a pid file. While the program runs, it consumes its output
-(stdout and stderr) and write to a log file *consuming minimum resources*.
+and create a pid file. While the program runs, **god** consumes its output
+(stdout and stderr) and write to a log file *using minimum system resources*.
 
 It also handles all signals (SIGINT, SIGTERM, etc) and forward them to the
 program being managed. On SIGHUP, **god** recycles its log file making it
 easy to integrate with logrotate. If SIGHUP is not supported by your program,
-**god** can handle the signal itself and not forward to your program, making
-it immune to hangups.
+**god** can handle the signal itself and not forward it, making your program
+immune to hangups.
 
 Go daemon is inspired by [twistd](http://twistedmatrix.com/documents/current/core/howto/basics.html#auto1),
 but primarily for running servers written in the
