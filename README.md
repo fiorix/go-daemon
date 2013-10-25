@@ -10,21 +10,21 @@ peculiar steps and can be done outside the code. This is what **god** is for.
 It executes a program for you doing things that daemons do: switch to another
 user and group, switch the directory of execution, detach from the terminal
 and create a pid file. While the program runs, it consumes its output
-(stdout and stderr) and write to a log file.
+(stdout and stderr) and write to a log file *consuming minimum resources*.
 
 It also handles all signals (SIGINT, SIGTERM, etc) and forward them to the
 program being managed. On SIGHUP, **god** recycles its log file making it
-easy to integrate with logrotate. If SIGHUP is not supported by your program
-**god** can handle it without forwarding the signal and making the program
-immune to hangups using the *--nohup* command line option.
+easy to integrate with logrotate. If SIGHUP is not supported by your program,
+**god** can handle the signal itself and not forward to your program, making
+it immune to hangups.
 
 Go daemon is inspired by [twistd](http://twistedmatrix.com/documents/current/core/howto/basics.html#auto1),
 but primarily for running servers written in the
 [Go Programming Language](http://golang.org) that don't (or just can't)
-care about daemonizing. It can also be used for running php, python and any
-other type of long lived programs that need to be daemonized.
+care about daemonizing. However, it can also be used for running php, python
+and any other type of long lived programs that need to be daemonized.
 
-A typical command line look like this:
+A typical command line looks like this:
 
 	god --nohup --logfile foo.log --pidfile foo.pid --user nobody --group nobody --rundir /opt/foo -- ./foobar --foobar-opts
 
@@ -35,21 +35,19 @@ Like if there's not enough options out there: upstart, systemd, launchd,
 daemontools, supervisord, runit, you name it. There's also utilities like
 apache's logger, etc.
 
-Go daemon aims at being as simple as possible to deploy and use, with
-practically no dependencies (besides libc and libpthread). It is the very
-minimum required for daemonizing programs while mixing well with other
-subsystems like upstart and logrotate. All other utilities mentioned above
-require configuration files and some times a complex installation with too
-many dependencies.
+Go daemon aims at being as simple as possible in regards to deployment and
+usage, and to run with minimum resources. It doesn't supervise the program,
+just run it as a daemon and takes care of its console output. It mixes well
+with upstart and logrotate, for example.
 
-It's ideal to use in docker images because it requires nothing and only
-takes about 15k of disk space.
+It's ideal to use in docker images too, because it has no dependencies and
+only takes a few KB of disk space.
 
 
 ## Building
 
 Go daemon is written in C and needs to be compiled. Debian and Ubuntu can
-install the compiler and tools (make) with the following command:
+install the compiler and tools with the following command:
 
 	apt-get install build-essential
 
