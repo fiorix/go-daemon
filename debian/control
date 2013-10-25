@@ -1,0 +1,15 @@
+Source: go-daemon
+Section: utils
+Priority: extra
+Maintainer: Alexandre Fiori <fiorix@gmail.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.3
+Homepage: http://github.com/fiorix/go-daemon
+
+Package: go-daemon
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Daemonize other programs
+ Go daemon (or just "god") is a command line tool to
+ "daemonize" programs that originally only run in
+ foreground and write logs to the console.

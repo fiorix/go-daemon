@@ -18,25 +18,33 @@ easy to integrate with logrotate. If SIGHUP is not supported by your program
 **god** can handle it without forwarding the signal and making the program
 immune to hangups using the *--nohup* command line option.
 
-The command line look like this:
-
-	god --nohup --logfile foo.log --pidfile foo.pid --user nobody --group nobody --rundir /opt/foo -- ./my-daemon --my-daemon-opts
-
 Go daemon is inspired by [twistd](http://twistedmatrix.com/documents/current/core/howto/basics.html#auto1),
 but primarily for running servers written in the
-[Go Programming Language](http://golang.org) that don't care about daemonizing.
-It can also be used for running php, python and any other type of long lived
-programs that need to be daemonized.
+[Go Programming Language](http://golang.org) that don't (or just can't)
+care about daemonizing. It can also be used for running php, python and any
+other type of long lived programs that need to be daemonized.
+
+A typical command line look like this:
+
+	god --nohup --logfile foo.log --pidfile foo.pid --user nobody --group nobody --rundir /opt/foo -- ./foobar --foobar-opts
+
 
 ## Why?
 
 Like if there's not enough options out there: upstart, systemd, launchd,
-daemontools, supervisord, etc... and the list goes on.
+daemontools, supervisord, runit, you name it. There's also utilities like
+apache's logger, etc.
 
-Go daemon aims at the very minimum for daemonizing while supporting other
-subsystems like logrotate. All others mentioned above require configuration
-files and some times a complex installation. But **god** mix well with them,
-for example upstart.
+Go daemon aims at being as simple as possible to deploy and use, with
+practically no dependencies (besides libc and libpthread). It is the very
+minimum required for daemonizing programs while mixing well with other
+subsystems like upstart and logrotate. All other utilities mentioned above
+require configuration files and some times a complex installation with too
+many dependencies.
+
+It's ideal to use in docker images because it requires nothing and only
+takes about 15k of disk space.
+
 
 ## Building
 
@@ -45,9 +53,12 @@ install the compiler and tools (make) with the following command:
 
 	apt-get install build-essential
 
-Once installed just type **make** to build it:
+Then build and install it:
 
-	$ make
-	cc god.c -o god -lpthread
+	make
+	make install
 
-The `god` command line tool should be ready to be used.
+The `god` command line tool should be ready to use.
+
+Go daemon can be packaged for both [debian](debian/README.Debian) and
+[rpm](rpm/README.md) based systems and has been tested on Ubuntu and CentOS.
