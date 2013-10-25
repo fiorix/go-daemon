@@ -7,7 +7,7 @@ the source code, available at http://github.com/fiorix/go-daemon.
 ## Building the rpm package
 
 The following steps have been used to sucessfully build rpm packages on CentOS
-and might work on other rpm-based distros.
+and RHEL, and might work on other rpm-based distros.
 
 1. Install dependencies
 

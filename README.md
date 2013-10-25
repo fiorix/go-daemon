@@ -59,4 +59,5 @@ Then build and install it:
 The `god` command line tool should be ready to use.
 
 Go daemon can be packaged for both [debian](debian/README.Debian) and
-[rpm](rpm/README.md) based systems and has been tested on Ubuntu and CentOS.
+[rpm](rpm/README.md) based systems and has been tested on Ubuntu, CentOS and
+RHEL.
