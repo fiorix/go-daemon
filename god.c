@@ -26,6 +26,7 @@ void usage() {
 	"Options:\n"
 	"-h --help           show this help and exit\n"
 	"-v --version        show version and exit\n"
+	"-f --foreground     run in foreground\n"
 	"-n --nohup          make the program immune to SIGHUP\n"
 	"-l --logfile FILE   write the program's stdout and stderr to FILE\n"
 	"-p --pidfile FILE   write pid to FILE\n"
@@ -58,6 +59,7 @@ int main(int argc, char **argv) {
 	char rundir[PATH_MAX];
 	char user[64];
 	char group[64];
+	int foreground = 0;
 
 	memset(logfile, 0, sizeof logfile);
 	memset(pidfile, 0, sizeof pidfile);
@@ -66,20 +68,21 @@ int main(int argc, char **argv) {
 	memset(group, 0, sizeof group);
 
 	static struct option opts[] = {
-		{ "help",     no_argument,       NULL, 'h' },
-		{ "version",  no_argument,       NULL, 'v' },
-		{ "nohup",    no_argument,       NULL, 'n' },
-		{ "logfile",  required_argument, NULL, 'l' },
-		{ "pidfile",  required_argument, NULL, 'p' },
-		{ "rundir",   required_argument, NULL, 'd' },
-		{ "user",     required_argument, NULL, 'u' },
-		{ "group",    required_argument, NULL, 'g' },
+		{ "help",      no_argument,       NULL, 'h' },
+		{ "version",   no_argument,       NULL, 'v' },
+		{ "foreground", no_argument,      NULL, 'f' },
+		{ "nohup",     no_argument,       NULL, 'n' },
+		{ "logfile",   required_argument, NULL, 'l' },
+		{ "pidfile",   required_argument, NULL, 'p' },
+		{ "rundir",    required_argument, NULL, 'd' },
+		{ "user",      required_argument, NULL, 'u' },
+		{ "group",     required_argument, NULL, 'g' },
 		{ NULL, 0, NULL, 0 },
 	};
 
 	int ch;
 	while (1) {
-		ch = getopt_long(argc, argv, "l:p:r:u:g:hvns", opts, NULL);
+		ch = getopt_long(argc, argv, "l:p:r:u:g:hvfns", opts, NULL);
 		if (ch == -1)
 			break;
 
@@ -88,6 +91,9 @@ int main(int argc, char **argv) {
 				printf("Go daemon v1.0\n");
 				printf("http://github.com/fiorix/go-daemon\n");
 				return 0;
+			case 'f':
+				foreground = 1;
+				break;
 			case 'n':
 				nohup = 1;
 				break;
@@ -157,8 +163,9 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	// Daemonize.
-	pid_t pid = fork();
+	pid_t pid;
+	if (!foreground)
+		pid = fork();
 	if (pid) {
 		waitpid(pid, NULL, 0);
 	} else if (!pid) {
@@ -167,7 +174,10 @@ int main(int argc, char **argv) {
 				fprintf(pidfp, "%d\n", pid);
 				fclose(pidfp);
 			}
-			exit(0);
+			if (foreground)
+				waitpid(pid, NULL, 0);
+			else
+				exit(0);
 		} else if (!pid) {
 			daemon_main(optind, argv);
 			if (pidfp)
