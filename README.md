@@ -58,6 +58,17 @@ Then build and install it:
 
 The `god` command line tool should be ready to use.
 
+### Binary packages
+
 Go daemon can be packaged for both [debian](debian/README.Debian.md) and
 [rpm](rpm/README.md) based systems and has been tested on Ubuntu, CentOS and
 RHEL.
+
+Ubuntu 12.04 packages are available at
+<https://launchpad.net/~fiorix/+archive/go-daemon/> and can be installed
+with following commands:
+
+	apt-get install python-software-properties
+	add-apt-repository ppa:fiorix/go-daemon
+	apt-get update
+	apt-get install go-daemon
