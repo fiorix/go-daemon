@@ -38,7 +38,7 @@ apache's logger, etc.
 Go daemon aims at being as simple as possible in regards to deployment and
 usage, and to run with minimum resources. It doesn't supervise the program,
 just run it as a daemon and takes care of its console output. It mixes well
-with upstart and logrotate, for example.
+with upstart and logrotate, [for example](https://github.com/fiorix/freegeoip/blob/master/README.md#running-with-upstart).
 
 It's ideal to use in docker images too, because it has no dependencies and
 only takes a few KB of disk space.
