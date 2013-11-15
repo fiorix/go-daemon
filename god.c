@@ -163,32 +163,38 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	pid_t pid;
-	if (!foreground)
-		pid = fork();
-	if (pid) {
-		waitpid(pid, NULL, 0);
-	} else if (!pid) {
-		if ((pid = fork())) {
-			if (pidfp) {
-				fprintf(pidfp, "%d\n", pid);
-				fclose(pidfp);
-			}
-			if (foreground)
-				waitpid(pid, NULL, 0);
-			else
-				exit(0);
+        if (foreground) {
+                if (pidfp) {
+                        fprintf(pidfp, "%d\n", getpid());
+                        fclose(pidfp);
+                }
+                daemon_main(optind, argv);
+                if (pidfp)
+                        unlink(pidfile);
+        } else {
+		// Daemonize.
+		pid_t pid = fork();
+		if (pid) {
+			waitpid(pid, NULL, 0);
 		} else if (!pid) {
-			daemon_main(optind, argv);
-			if (pidfp)
-				unlink(pidfile);
+			if ((pid = fork())) {
+				if (pidfp) {
+					fprintf(pidfp, "%d\n", pid);
+					fclose(pidfp);
+				}
+				exit(0);
+			} else if (!pid) {
+				daemon_main(optind, argv);
+				if (pidfp)
+					unlink(pidfile);
+			} else {
+				perror("fork");
+				exit(1);
+			}
 		} else {
 			perror("fork");
 			exit(1);
 		}
-	} else {
-		perror("fork");
-		exit(1);
 	}
 
 	return 0;
@@ -197,7 +203,7 @@ int main(int argc, char **argv) {
 void daemon_main(int optind, char **argv) {
 	// Fwd all signals to the child, except SIGHUP.
 	int signum;
-	for (signum = SIGINT; signum < SIGUSR1; signum++) {
+	for (signum = 1; signum < 33; signum++) {
 		if (signal(signum, sigfwd) == SIG_IGN)
 			signal(signum, SIG_IGN);
 	}
@@ -207,8 +213,8 @@ void daemon_main(int optind, char **argv) {
 		close(logfd[1]);
 		pthread_t logth;
 		pthread_create(&logth, NULL, logger_thread, argv[optind]);
-		pthread_join(logth, NULL);
 		waitpid(childpid, NULL, 0);
+		pthread_join(logth, NULL);
 	} else if (!childpid) {
 		close(logfd[0]);
 		close(0);
