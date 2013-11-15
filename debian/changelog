@@ -1,3 +1,10 @@
+go-daemon (1.0-2) precise; urgency=low
+
+  * Bug fixes
+  * Ubuntu release
+
+ -- Alexandre Fiori <fiorix@gmail.com>  Wed, 28 Aug 2013 22:37:04 +0000
+
 go-daemon (1.0-1) unstable; urgency=low
 
   * Initial release
