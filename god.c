@@ -43,7 +43,9 @@ static int nohup = 0;
 static int logfd[2]; // pipe
 static pid_t childpid = 0;
 static FILE *logfp = NULL;
+static FILE *pidfp = NULL;
 static char logfile[PATH_MAX];
+static char pidfile[PATH_MAX];
 static char linebuf[1024];
 static struct passwd *pwd = NULL;
 static struct group *grp = NULL;
@@ -55,7 +57,6 @@ void sighup(int signum);
 void sigfwd(int signum);
 
 int main(int argc, char **argv) {
-	char pidfile[PATH_MAX];
 	char rundir[PATH_MAX];
 	char user[64];
 	char group[64];
@@ -88,7 +89,7 @@ int main(int argc, char **argv) {
 
 		switch (ch) {
 			case 'v':
-				printf("Go daemon v1.0\n");
+				printf("Go daemon v1.1\n");
 				printf("http://github.com/fiorix/go-daemon\n");
 				return 0;
 			case 'f':
@@ -145,7 +146,6 @@ int main(int argc, char **argv) {
 	if (logfp)
 		setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
 
-	FILE *pidfp = NULL;
 	if (*pidfile != 0 && (pidfp = fopen(pidfile, "w+")) == NULL) {
 		perror("failed to open pidfile");
 		return 1;
@@ -164,13 +164,7 @@ int main(int argc, char **argv) {
 	}
 
         if (foreground) {
-                if (pidfp) {
-                        fprintf(pidfp, "%d\n", getpid());
-                        fclose(pidfp);
-                }
                 daemon_main(optind, argv);
-                if (pidfp)
-                        unlink(pidfile);
         } else {
 		// Daemonize.
 		pid_t pid = fork();
@@ -178,15 +172,9 @@ int main(int argc, char **argv) {
 			waitpid(pid, NULL, 0);
 		} else if (!pid) {
 			if ((pid = fork())) {
-				if (pidfp) {
-					fprintf(pidfp, "%d\n", pid);
-					fclose(pidfp);
-				}
 				exit(0);
 			} else if (!pid) {
 				daemon_main(optind, argv);
-				if (pidfp)
-					unlink(pidfile);
 			} else {
 				perror("fork");
 				exit(1);
@@ -201,6 +189,10 @@ int main(int argc, char **argv) {
 }
 
 void daemon_main(int optind, char **argv) {
+	if (pidfp) {
+		fprintf(pidfp, "%d\n", getpid());
+		fclose(pidfp);
+	}
 	// Fwd all signals to the child, except SIGHUP.
 	int signum;
 	for (signum = 1; signum < 33; signum++) {
@@ -232,6 +224,8 @@ void daemon_main(int optind, char **argv) {
 		perror("fork");
 		exit(1);
 	}
+	if (pidfp)
+		unlink(pidfile);
 }
 
 void *logger_thread(void *cmdname) {
