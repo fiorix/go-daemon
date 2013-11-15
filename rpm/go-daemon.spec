@@ -2,7 +2,7 @@
 
 Summary: Daemonize other programs
 Name: go-daemon
-Version: 1.0
+Version: 1.1
 Release: 1
 License: BSD
 Group: Utilities
@@ -34,3 +34,7 @@ make DESTDIR=%{buildroot} install
 %changelog
 * Wed Oct 24 2013 Alexandre Fiori <fiorix@gmail.com> 1.0-1
 - Initial release
+
+* Wed Oct 24 2013 Alexandre Fiori <fiorix@gmail.com> 1.1-1
+- Improvements
+- Bug fixes

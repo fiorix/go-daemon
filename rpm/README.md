@@ -20,8 +20,8 @@ Create directories for building under your home:
 
 Copy the source code and spec file to the building environment:
 
-	cp -r go-daemon go-daemon-1.0
-	tar czvf ~/rpmbuild/SOURCES/go-daemon-1.0.tar.gz go-daemon-1.0
+	cp -r go-daemon go-daemon-1.1
+	tar czvf ~/rpmbuild/SOURCES/go-daemon-1.1.tar.gz go-daemon-1.1
 	cp go-daemon/rpm/go-daemon.spec ~/rpmbuild/SPECS
 
 Build the package:
@@ -32,6 +32,6 @@ Build the package:
 Install it:
 
 	cd ~/rpmbuild/RPMS/<arch>
-	rpm -i go-daemon-1.0-1.<arch>.rpm
+	rpm -i go-daemon-1.1-1.<arch>.rpm
 
 The package can be distributed and installed on other systems.
