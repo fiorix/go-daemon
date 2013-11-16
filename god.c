@@ -33,6 +33,7 @@ void usage() {
 	"-r --rundir DIR     switch to DIR before executing the program\n"
 	"-u --user USER      switch to USER before executing the program\n"
 	"-g --group GROUP    switch to GROUP before executing the program\n"
+	"-e --env file       environment variables file\n"
 	"\nThe program's output go to a blackhole if no logfile is set.\n"
 	"Log files are recycled on SIGHUP.\n"
 	);
@@ -51,22 +52,26 @@ static struct passwd *pwd = NULL;
 static struct group *grp = NULL;
 static pthread_mutex_t logger_mutex;
 
-void daemon_main(int optind, char **argv);
+void daemon_main(int optind, char **argv, char **env);
 void *logger_thread(void *cmdname);
 void sighup(int signum);
 void sigfwd(int signum);
+char ** read_elvis(char *);
 
 int main(int argc, char **argv) {
 	char rundir[PATH_MAX];
 	char user[64];
 	char group[64];
 	int foreground = 0;
+    char envfilepath[PATH_MAX];
+    char **env = NULL;
 
 	memset(logfile, 0, sizeof logfile);
 	memset(pidfile, 0, sizeof pidfile);
 	memset(rundir, 0, sizeof rundir);
 	memset(user, 0, sizeof user);
 	memset(group, 0, sizeof group);
+	memset(envfilepath, 0, sizeof envfilepath);
 
 	static struct option opts[] = {
 		{ "help",      no_argument,       NULL, 'h' },
@@ -78,12 +83,13 @@ int main(int argc, char **argv) {
 		{ "rundir",    required_argument, NULL, 'd' },
 		{ "user",      required_argument, NULL, 'u' },
 		{ "group",     required_argument, NULL, 'g' },
+		{ "env",       optional_argument, NULL, 'e' },
 		{ NULL, 0, NULL, 0 },
 	};
 
 	int ch;
 	while (1) {
-		ch = getopt_long(argc, argv, "l:p:r:u:g:hvfns", opts, NULL);
+		ch = getopt_long(argc, argv, "l:p:r:u:g:hvfnse:", opts, NULL);
 		if (ch == -1)
 			break;
 
@@ -112,6 +118,14 @@ int main(int argc, char **argv) {
 				break;
 			case 'g':
 				strncpy(group, optarg, sizeof group - 1);
+				break;
+			case 'e':
+				strncpy(envfilepath, optarg, sizeof envfilepath - 1);
+                env = read_elvis(envfilepath);
+                if (!env) {
+                    fprintf(stderr,"Error reading env file %s", envfilepath);
+                    exit (-1);
+                }
 				break;
 			default:
 				usage();
@@ -164,7 +178,7 @@ int main(int argc, char **argv) {
 	}
 
         if (foreground) {
-                daemon_main(optind, argv);
+                daemon_main(optind, argv, env);
         } else {
 		// Daemonize.
 		pid_t pid = fork();
@@ -174,7 +188,7 @@ int main(int argc, char **argv) {
 			if ((pid = fork())) {
 				exit(0);
 			} else if (!pid) {
-				daemon_main(optind, argv);
+				daemon_main(optind, argv, env);
 			} else {
 				perror("fork");
 				exit(1);
@@ -188,7 +202,7 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-void daemon_main(int optind, char **argv) {
+void daemon_main(int optind, char **argv, char **env) {
 	if (pidfp) {
 		fprintf(pidfp, "%d\n", getpid());
 		fclose(pidfp);
@@ -214,8 +228,16 @@ void daemon_main(int optind, char **argv) {
 		close(2);
 		dup2(logfd[1], 1);
 		dup2(logfd[1], 2);
-		execvp(argv[optind], argv + optind);
-		printf("\x1b%s", strerror(errno));
+		if (!env) {
+            #ifdef __APPLE__
+                execve(argv[optind], argv + optind, env);
+            #else
+                execvpe(argv[optind], argv + optind, env);
+            #endif
+        } else {
+		    execvp(argv[optind], argv + optind);
+		}
+        printf("\x1b%s", strerror(errno));
 		fflush(stdout);
 		close(logfd[1]);
 		close(1);
@@ -291,4 +313,36 @@ void sighup(int signum) {
 void sigfwd(int signum) {
 	if (childpid)
 		kill(childpid, signum);
+}
+
+char **read_elvis(char *file){
+    FILE * fp;
+    char * line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    char **envp = NULL;
+    int current_line = 1;
+
+
+    fp = fopen(file, "r");
+    if (fp == NULL) return NULL;
+    printf("Reading env from %s\n", file);
+
+    while ((read = getline(&line, &len, fp)) != -1) {
+        envp = realloc(envp, current_line * sizeof(char *));
+        if (envp == NULL) {
+            perror("realloc");
+            return NULL;
+        }
+        envp[current_line -1 ] = strdup(line);
+        current_line ++;
+    }
+    envp = realloc(envp, current_line * sizeof(char *));
+    envp[current_line - 1] = NULL;
+
+    if (line) free(line);
+    for (int a=0; envp[a] != NULL; a++){
+        fprintf(stderr, "%s", envp[a]);
+    }
+    return envp;
 }
