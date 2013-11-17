@@ -38,3 +38,6 @@ make DESTDIR=%{buildroot} install
 * Wed Oct 24 2013 Alexandre Fiori <fiorix@gmail.com> 1.1-1
 - Improvements
 - Bug fixes
+
+* Sun Nov 17 2013 Alexandre Fiori <fiorix@gmail.com> 1.2
+- Only rotate log file after opening new one on HUP

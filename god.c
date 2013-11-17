@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
 
 		switch (ch) {
 			case 'v':
-				printf("Go daemon v1.1\n");
+				printf("Go daemon v1.2\n");
 				printf("http://github.com/fiorix/go-daemon\n");
 				return 0;
 			case 'f':
@@ -273,9 +273,12 @@ void sighup(int signum) {
 	}
 	pthread_mutex_lock(&logger_mutex);
 	if (logfp) {
-		fclose(logfp);
-		logfp = fopen(logfile, "a");
-		setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
+		FILE *fp = fopen(logfile, "a");
+		if (fp != NULL) {
+			fclose(logfp);
+			logfp = fp;
+			setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
+		}
 	}
 	if (grp != NULL) {
 		setegid(grp->gr_gid);
