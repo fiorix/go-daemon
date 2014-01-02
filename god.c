@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
 		{ "nohup",     no_argument,       NULL, 'n' },
 		{ "logfile",   required_argument, NULL, 'l' },
 		{ "pidfile",   required_argument, NULL, 'p' },
-		{ "rundir",    required_argument, NULL, 'd' },
+		{ "rundir",    required_argument, NULL, 'r' },
 		{ "user",      required_argument, NULL, 'u' },
 		{ "group",     required_argument, NULL, 'g' },
 		{ NULL, 0, NULL, 0 },
