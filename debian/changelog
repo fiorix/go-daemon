@@ -2,6 +2,8 @@ go-daemon (1.2-1) precise; urgency=low
 
   * Fixed typo in cmdline args
 
+ -- Alexandre Fiori <fiorix@gmail.com>  Thu,  2 Jan 2014 04:50:42 +0000
+
 go-daemon (1.2) precise; urgency=low
 
   * Only rotate log file after opening new one on HUP
