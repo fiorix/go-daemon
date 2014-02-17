@@ -11,27 +11,14 @@ and RHEL, and might work on other rpm-based distros.
 
 Install dependencies:
 
-	yum install gcc make rpm-build redhat-rpm-config
+	make deps
 
-Create directories for building under your home:
+Build the rpm under ~/rpmbuild (will overwrite ~/.rpmmacros):
 
-	mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-	echo '%_topdir %(echo $HOME)/rpmbuild' > ~/.rpmmacros
+	make
 
-Copy the source code and spec file to the building environment:
+Install:
 
-	cp -r go-daemon go-daemon-1.1
-	tar czvf ~/rpmbuild/SOURCES/go-daemon-1.1.tar.gz go-daemon-1.1
-	cp go-daemon/rpm/go-daemon.spec ~/rpmbuild/SPECS
+	rpm -i ~/rpmbuild/RPMS/<arch>/go-daemon-<version>.<arch>.rpm
 
-Build the package:
-
-	cd ~/rpmbuild/SPECS
-	rpmbuild -ba go-daemon.spec
-
-Install it:
-
-	cd ~/rpmbuild/RPMS/<arch>
-	rpm -i go-daemon-1.1-1.<arch>.rpm
-
-The package can be distributed and installed on other systems.
+The RPM package can be distributed and installed on other systems.
