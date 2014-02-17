@@ -3,7 +3,7 @@ Upstream-Name: go-daemon
 Source: http://github.com/fiorix/go-daemon
 
 Files: *
-Copyright: 2013 Alexandre Fiori <fiorix@gmail.com>
+Copyright: 2013-2014 Alexandre Fiori <fiorix@gmail.com>
 License: BSD-style
 
  Redistribution and use in source and binary forms, with or without
