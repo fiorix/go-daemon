@@ -2,7 +2,7 @@
 
 Summary: Daemonize other programs
 Name: go-daemon
-Version: 1.1
+Version: 1.2
 Release: 1
 License: BSD
 Group: Utilities
@@ -32,12 +32,15 @@ make DESTDIR=%{buildroot} install
 %{_bindir}/god
 
 %changelog
-* Wed Oct 24 2013 Alexandre Fiori <fiorix@gmail.com> 1.0-1
-- Initial release
+* Thu Jan 02 2014 Alexandre Fiori <fiorix@gmail.com> 1.2-1
+- Fixed typo in cmdline args
+
+* Sun Nov 17 2013 Alexandre Fiori <fiorix@gmail.com> 1.2
+- Only rotate log file after opening new one on HUP
 
 * Wed Oct 24 2013 Alexandre Fiori <fiorix@gmail.com> 1.1-1
 - Improvements
 - Bug fixes
 
-* Sun Nov 17 2013 Alexandre Fiori <fiorix@gmail.com> 1.2
-- Only rotate log file after opening new one on HUP
+* Wed Oct 24 2013 Alexandre Fiori <fiorix@gmail.com> 1.0-1
+- Initial release
