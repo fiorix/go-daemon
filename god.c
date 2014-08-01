@@ -35,6 +35,7 @@ void usage() {
 	"-g --group GROUP    switch to GROUP before executing the program\n"
 	"\nThe program's output go to a blackhole if no logfile is set.\n"
 	"Log files are recycled on SIGHUP.\n"
+	"Program is reloaded on SIGWINCH.\n"
 	);
 	exit(1);
 }
@@ -50,10 +51,12 @@ static char linebuf[1024];
 static struct passwd *pwd = NULL;
 static struct group *grp = NULL;
 static pthread_mutex_t logger_mutex;
+static int forkagain = 0;
 
 void daemon_main(int optind, char **argv);
 void *logger_thread(void *cmdname);
 void sighup(int signum);
+void sigwinch(int signum);
 void sigfwd(int signum);
 
 int main(int argc, char **argv) {
@@ -200,30 +203,37 @@ void daemon_main(int optind, char **argv) {
 			signal(signum, SIG_IGN);
 	}
 	signal(SIGHUP, sighup);
-	pipe(logfd);
-	if ((childpid = fork())) {
-		close(logfd[1]);
-		pthread_t logth;
-		pthread_create(&logth, NULL, logger_thread, argv[optind]);
-		waitpid(childpid, NULL, 0);
-		pthread_join(logth, NULL);
-	} else if (!childpid) {
-		close(logfd[0]);
-		close(0);
-		close(1);
-		close(2);
-		dup2(logfd[1], 1);
-		dup2(logfd[1], 2);
-		execvp(argv[optind], argv + optind);
-		printf("\x1b%s", strerror(errno));
-		fflush(stdout);
-		close(logfd[1]);
-		close(1);
-		close(2);
-	} else {
-		perror("fork");
-		exit(1);
-	}
+	signal(SIGWINCH, sigwinch);
+
+	do {
+		forkagain = 0;
+		pipe(logfd);
+		if ((childpid = fork())) {
+			close(logfd[1]);
+			pthread_t logth;
+			pthread_create(&logth, NULL, logger_thread, argv[optind]);
+			waitpid(childpid, NULL, 0);
+			close(logfd[0]);
+			pthread_join(logth, NULL);
+		} else if (!childpid) {
+			close(logfd[0]);
+			close(0);
+			close(1);
+			close(2);
+			dup2(logfd[1], 1);
+			dup2(logfd[1], 2);
+			execvp(argv[optind], argv + optind);
+			printf("\x1b%s", strerror(errno));
+			fflush(stdout);
+			close(logfd[1]);
+			close(1);
+			close(2);
+		} else {
+			perror("fork");
+			exit(1);
+		}
+	} while (forkagain);
+
 	if (pidfp)
 		unlink(pidfile);
 }
@@ -289,6 +299,11 @@ void sighup(int signum) {
 	pthread_mutex_unlock(&logger_mutex);
 	if (!nohup && childpid) // nonohup :~
 		kill(childpid, signum);
+}
+
+void sigwinch(int signum) {
+	kill(childpid, SIGTERM);
+	forkagain = 1;
 }
 
 void sigfwd(int signum) {
