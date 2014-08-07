@@ -35,7 +35,7 @@ void usage() {
 	"-g --group GROUP    switch to GROUP before executing the program\n"
 	"\nThe program's output go to a blackhole if no logfile is set.\n"
 	"Log files are recycled on SIGHUP.\n"
-	"Program is reloaded on SIGWINCH.\n"
+	"Program is reloaded on SIGUSR1.\n"
 	);
 	exit(1);
 }
@@ -56,7 +56,7 @@ static int forkagain = 0;
 void daemon_main(int optind, char **argv);
 void *logger_thread(void *cmdname);
 void sighup(int signum);
-void sigwinch(int signum);
+void sigusr1(int signum);
 void sigfwd(int signum);
 
 int main(int argc, char **argv) {
@@ -203,7 +203,7 @@ void daemon_main(int optind, char **argv) {
 			signal(signum, SIG_IGN);
 	}
 	signal(SIGHUP, sighup);
-	signal(SIGWINCH, sigwinch);
+	signal(SIGUSR1, sigusr1);
 
 	do {
 		forkagain = 0;
@@ -301,7 +301,7 @@ void sighup(int signum) {
 		kill(childpid, signum);
 }
 
-void sigwinch(int signum) {
+void sigusr1(int signum) {
 	kill(childpid, SIGTERM);
 	forkagain = 1;
 }
