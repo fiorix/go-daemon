@@ -19,6 +19,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 void usage() {
 	printf(
@@ -61,6 +62,7 @@ int main(int argc, char **argv) {
 	char user[64];
 	char group[64];
 	int foreground = 0;
+	struct stat exec_stat;
 
 	memset(logfile, 0, sizeof logfile);
 	memset(pidfile, 0, sizeof pidfile);
@@ -160,6 +162,17 @@ int main(int argc, char **argv) {
 	if (pwd != NULL && seteuid(pwd->pw_uid) == -1) {
 		fprintf(stderr, "failed to switch to user %s: %s\n",
 				user, strerror(errno));
+		return 1;
+	}
+
+	if (stat(argv[optind], &exec_stat) < 0) {
+		fprintf(stderr, "failed to stat %s: %s\n",
+				 argv[optind], strerror(errno));
+		return 1;
+	}
+	if (!(exec_stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
+		fprintf(stderr, "file %s doesn't look executable\n",
+				argv[optind]);
 		return 1;
 	}
 
