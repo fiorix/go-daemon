@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	if (!(exec_stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
-		fprintf(stderr, "file %s doesn't look executable\n",
+		fprintf(stderr, "permission denied: %s\n",
 				argv[optind]);
 		return 1;
 	}
