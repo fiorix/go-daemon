@@ -19,6 +19,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 void usage() {
 	printf(
@@ -61,6 +62,7 @@ int main(int argc, char **argv) {
 	char user[64];
 	char group[64];
 	int foreground = 0;
+	struct stat exec_stat;
 
 	memset(logfile, 0, sizeof logfile);
 	memset(pidfile, 0, sizeof pidfile);
@@ -163,6 +165,17 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	if (stat(argv[optind], &exec_stat) < 0) {
+		fprintf(stderr, "failed to stat %s: %s\n",
+				 argv[optind], strerror(errno));
+		return 1;
+	}
+	if (!(exec_stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
+		fprintf(stderr, "permission denied: %s\n",
+				argv[optind]);
+		return 1;
+	}
+
         if (foreground) {
                 daemon_main(optind, argv);
         } else {
@@ -174,6 +187,9 @@ int main(int argc, char **argv) {
 			if ((pid = fork())) {
 				exit(0);
 			} else if (!pid) {
+				close(0);
+				close(1);
+				close(2);
 				daemon_main(optind, argv);
 			} else {
 				perror("fork");
