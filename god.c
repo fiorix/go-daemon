@@ -174,6 +174,9 @@ int main(int argc, char **argv) {
 			if ((pid = fork())) {
 				exit(0);
 			} else if (!pid) {
+				close(0);
+				close(1);
+				close(2);
 				daemon_main(optind, argv);
 			} else {
 				perror("fork");
