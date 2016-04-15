@@ -1,4 +1,4 @@
-// Copyright 2013-2014 Alexandre Fiori
+// Copyright 2013-2016 Alexandre Fiori
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+
+#ifndef VERSION
+#define VERSION "tip"
+#endif
 
 void usage() {
 	printf(
@@ -48,21 +52,19 @@ static FILE *pidfp = NULL;
 static char logfile[PATH_MAX];
 static char pidfile[PATH_MAX];
 static char linebuf[1024];
-static struct passwd *pwd = NULL;
-static struct group *grp = NULL;
 static pthread_mutex_t logger_mutex;
 
 void daemon_main(int optind, char **argv);
 void *logger_thread(void *cmdname);
 void sighup(int signum);
 void sigfwd(int signum);
+char *exec_abspath(char *filename);
 
 int main(int argc, char **argv) {
 	char rundir[PATH_MAX];
 	char user[64];
 	char group[64];
 	int foreground = 0;
-	struct stat exec_stat;
 
 	memset(logfile, 0, sizeof logfile);
 	memset(pidfile, 0, sizeof pidfile);
@@ -71,15 +73,15 @@ int main(int argc, char **argv) {
 	memset(group, 0, sizeof group);
 
 	static struct option opts[] = {
-		{ "help",      no_argument,       NULL, 'h' },
-		{ "version",   no_argument,       NULL, 'v' },
-		{ "foreground", no_argument,      NULL, 'f' },
-		{ "nohup",     no_argument,       NULL, 'n' },
-		{ "logfile",   required_argument, NULL, 'l' },
-		{ "pidfile",   required_argument, NULL, 'p' },
-		{ "rundir",    required_argument, NULL, 'r' },
-		{ "user",      required_argument, NULL, 'u' },
-		{ "group",     required_argument, NULL, 'g' },
+		{ "help",	no_argument,		NULL, 'h' },
+		{ "version",	no_argument,		NULL, 'v' },
+		{ "foreground",	no_argument,		NULL, 'f' },
+		{ "nohup",	no_argument,		NULL, 'n' },
+		{ "logfile",	required_argument,	NULL, 'l' },
+		{ "pidfile",	required_argument,	NULL, 'p' },
+		{ "rundir",	required_argument,	NULL, 'r' },
+		{ "user",	required_argument,	NULL, 'u' },
+		{ "group",	required_argument,	NULL, 'g' },
 		{ NULL, 0, NULL, 0 },
 	};
 
@@ -91,7 +93,7 @@ int main(int argc, char **argv) {
 
 		switch (ch) {
 			case 'v':
-				printf("Go daemon v1.2\n");
+				printf("Go daemon %s\n", VERSION);
 				printf("http://github.com/fiorix/go-daemon\n");
 				return 0;
 			case 'f':
@@ -129,76 +131,75 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	if (*user != 0 && (pwd = getpwnam(user)) == NULL) {
-		fprintf(stderr, "failed to switch to user %s: %s\n",
+	struct passwd *pwd = NULL;
+	if ((*user && !(pwd = getpwnam(user)))) {
+		fprintf(stderr, "failed to get user %s: %s\n",
 				user, strerror(errno));
 		return 1;
 	}
 
-	if (*group != 0 && (grp = getgrnam(group)) == NULL) {
+	struct group *grp = NULL;
+	if ((*group && !(grp = getgrnam(group)))) {
+		fprintf(stderr, "failed to get group %s: %s\n",
+				group, strerror(errno));
+		return 1;
+	}
+
+	if (grp && setregid(grp->gr_gid, grp->gr_gid) == -1) {
 		fprintf(stderr, "failed to switch to group %s: %s\n",
 				group, strerror(errno));
 		return 1;
 	}
 
-	if (*logfile != 0 && (logfp = fopen(logfile, "a")) == NULL) {
+	const gid_t gid = getgid();
+	setgroups(1, &gid);
+
+	if (pwd && setreuid(pwd->pw_uid, pwd->pw_uid) == -1) {
+		fprintf(stderr, "failed to switch to user %s: %s\n",
+				user, strerror(errno));
+		return 1;
+	}
+
+	if (*logfile && (logfp = fopen(logfile, "a")) == NULL) {
 		perror("failed to open logfile");
 		return 1;
 	}
 	if (logfp)
 		setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
 
-	if (*pidfile != 0 && (pidfp = fopen(pidfile, "w+")) == NULL) {
+	if (*pidfile && (pidfp = fopen(pidfile, "w+")) == NULL) {
 		perror("failed to open pidfile");
 		return 1;
 	}
 
-	if (grp != NULL && setegid(grp->gr_gid) == -1) {
-		fprintf(stderr, "failed to switch to group %s: %s\n",
-				group, strerror(errno));
+	char *abspath;
+	if (!(abspath = exec_abspath(argv[optind]))) {
+		perror(argv[optind]);
 		return 1;
 	}
-
-	if (pwd != NULL && seteuid(pwd->pw_uid) == -1) {
-		fprintf(stderr, "failed to switch to user %s: %s\n",
-				user, strerror(errno));
-		return 1;
-	}
-
-	if (stat(argv[optind], &exec_stat) < 0) {
-		fprintf(stderr, "failed to stat %s: %s\n",
-				 argv[optind], strerror(errno));
-		return 1;
-	}
-	if (!(exec_stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
-		fprintf(stderr, "permission denied: %s\n",
-				argv[optind]);
-		return 1;
-	}
+	argv[optind] = abspath;
 
         if (foreground) {
                 daemon_main(optind, argv);
-        } else {
-		// Daemonize.
-		pid_t pid = fork();
-		if (pid) {
-			waitpid(pid, NULL, 0);
+		return 0;
+	}
+
+	// Daemonize.
+	pid_t pid = fork();
+	if (pid) {
+		waitpid(pid, NULL, 0);
+	} else if (!pid) {
+		if ((pid = fork())) {
+			exit(0);
 		} else if (!pid) {
-			if ((pid = fork())) {
-				exit(0);
-			} else if (!pid) {
-				close(0);
-				close(1);
-				close(2);
-				daemon_main(optind, argv);
-			} else {
-				perror("fork");
-				exit(1);
-			}
+			daemon_main(optind, argv);
 		} else {
 			perror("fork");
 			exit(1);
 		}
+	} else {
+		perror("fork");
+		exit(1);
 	}
 
 	return 0;
@@ -218,6 +219,9 @@ void daemon_main(int optind, char **argv) {
 	signal(SIGHUP, sighup);
 	pipe(logfd);
 	if ((childpid = fork())) {
+		close(0);
+		close(1);
+		close(2);
 		close(logfd[1]);
 		pthread_t logth;
 		pthread_create(&logth, NULL, logger_thread, argv[optind]);
@@ -225,9 +229,6 @@ void daemon_main(int optind, char **argv) {
 		pthread_join(logth, NULL);
 	} else if (!childpid) {
 		close(logfd[0]);
-		close(0);
-		close(1);
-		close(2);
 		dup2(logfd[1], 1);
 		dup2(logfd[1], 2);
 		execvp(argv[optind], argv + optind);
@@ -276,17 +277,16 @@ void *logger_thread(void *cmdname) {
 		}
 		pthread_mutex_unlock(&logger_mutex);
 	}
-
+	pthread_mutex_lock(&logger_mutex);
+	if (logfp) {
+		fflush(logfp);
+		fclose(logfp);
+	}
+	pthread_mutex_unlock(&logger_mutex);
 	return NULL;
 }
 
 void sighup(int signum) {
-	if (pwd != NULL) {
-		seteuid(getuid());
-	}
-	if (grp != NULL) {
-		setegid(getgid());
-	}
 	pthread_mutex_lock(&logger_mutex);
 	if (logfp) {
 		FILE *fp = fopen(logfile, "a");
@@ -296,12 +296,6 @@ void sighup(int signum) {
 			setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
 		}
 	}
-	if (grp != NULL) {
-		setegid(grp->gr_gid);
-	}
-	if (pwd != NULL) {
-		seteuid(pwd->pw_uid);
-	}
 	pthread_mutex_unlock(&logger_mutex);
 	if (!nohup && childpid) // nonohup :~
 		kill(childpid, signum);
@@ -310,4 +304,70 @@ void sighup(int signum) {
 void sigfwd(int signum) {
 	if (childpid)
 		kill(childpid, signum);
+}
+
+int exec_ok(char *filename) {
+	struct stat st;
+	if (stat(filename, &st) < 0) {
+		errno = ENOENT;
+		return 0;
+	}
+	if (S_ISDIR(st.st_mode)) {
+		errno = EISDIR;
+		return 0;
+	}
+	if (!(st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))) {
+		errno = EACCES;
+		return 0;
+	}
+	return 1;
+}
+
+// exec_abspath returns the absolute path of the given file name by
+// looking it up in the current directory and the directories listed
+// in the PATH environment variable, only if the file is executable.
+// The returned pointer points to a static buffer that is reused on
+// subsequent calls. In case the file does not exist, or does not have
+// executable permissions, returns NULL and errno is set accordingly.
+char *exec_abspath(char *filename) {
+	static char abspath[PATH_MAX];
+
+	if (!filename) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	if (*filename == '.' || *filename == '/') {
+		switch (exec_ok(filename)) {
+		case  1: return realpath(filename, abspath);
+		default: return NULL;
+		}
+	}
+
+	char *path = getenv("PATH");
+	if (!path) return NULL;
+
+	char *v[(PATH_MAX/2)], **paths = v;
+	char *p = strdup(path);
+	path = p;
+
+	while (*p) {
+		while (*p && *p == ':') *p++ = 0;
+		if (*p) *(paths++) = p;
+		while (*p && *p != ':') p++;
+	}
+	*paths = NULL;
+
+	int l, fnlen = strlen(filename);
+	for (paths = v; *paths; paths++) {
+		l = strlen(*paths) + fnlen + 2;
+		if (l > sizeof(abspath)) continue;
+		snprintf(abspath, l, "%s/%s", *paths, filename);
+		if (exec_ok(abspath)) {
+			free(path);
+			return abspath;
+		}
+	}
+	free(path);
+	return NULL;
 }
