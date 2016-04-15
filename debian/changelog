@@ -1,3 +1,10 @@
+go-daemon (1.3) precise; urgency=low
+
+  * Fix for detaching from terminal
+  * Fix for privilege escalation due to weak privdrop
+
+ -- Alexandre Fiori <fiorix@gmail.com>  Fri, 15 Apr 2016 04:43:11 +0000
+
 go-daemon (1.2-1) precise; urgency=low
 
   * Fixed typo in cmdline args

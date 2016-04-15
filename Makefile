@@ -2,13 +2,15 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-PKG=go-daemon-1.2
+VERSION=1.3
+
+PKG=go-daemon-$(VERSION)
 TGZ=$(PKG).tar.gz
 
 all: god
 
 god:
-	cc god.c -o god -lpthread
+	cc -Wall -DVERSION=\"$(VERSION)\" -o god god.c -lpthread
 
 clean:
 	rm -f god $(TGZ)

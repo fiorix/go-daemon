@@ -2,7 +2,7 @@
 
 Summary: Daemonize other programs
 Name: go-daemon
-Version: 1.2
+Version: 1.3
 Release: 1
 License: BSD
 Group: Utilities
@@ -32,6 +32,10 @@ make DESTDIR=%{buildroot} install
 %{_bindir}/god
 
 %changelog
+* Fri Apr 15 2016 Alexandre Fiori <fiorix@gmail.com> 1.3
+- Fix for detaching from terminal
+- Fix for privilege escalation due to weak privdrop
+
 * Thu Jan 02 2014 Alexandre Fiori <fiorix@gmail.com> 1.2-1
 - Fixed typo in cmdline args
 
