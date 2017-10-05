@@ -231,6 +231,9 @@ void daemon_main(int optind, char **argv) {
 		close(logfd[0]);
 		dup2(logfd[1], 1);
 		dup2(logfd[1], 2);
+		if (logfp) {
+			fclose(logfp);
+		}
 		execvp(argv[optind], argv + optind);
 		printf("\x1b%s", strerror(errno));
 		fflush(stdout);
