@@ -186,10 +186,10 @@ int main(int argc, char **argv) {
 
 	// Daemonize.
 	pid_t pid = fork();
-	if (pid) {
+	if (pid > 0) {
 		waitpid(pid, NULL, 0);
 	} else if (!pid) {
-		if ((pid = fork())) {
+		if ((pid = fork()) > 0) {
 			exit(0);
 		} else if (!pid) {
 			daemon_main(optind, argv);
@@ -218,7 +218,7 @@ void daemon_main(int optind, char **argv) {
 	}
 	signal(SIGHUP, sighup);
 	pipe(logfd);
-	if ((childpid = fork())) {
+	if ((childpid = fork()) > 0) {
 		close(0);
 		close(1);
 		close(2);
