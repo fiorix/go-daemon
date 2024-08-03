@@ -55,9 +55,9 @@ static char linebuf[1024];
 static pthread_mutex_t logger_mutex;
 
 void daemon_main(int optind, char **argv);
+void signal_init(sigset_t* old_sigmask);
+void *signal_thread(void* arg);
 void *logger_thread(void *cmdname);
-void sighup(int signum);
-void sigfwd(int signum);
 char *exec_abspath(char *filename);
 
 int main(int argc, char **argv) {
@@ -210,13 +210,9 @@ void daemon_main(int optind, char **argv) {
 		fprintf(pidfp, "%d\n", getpid());
 		fclose(pidfp);
 	}
-	// Fwd all signals to the child, except SIGHUP.
-	int signum;
-	for (signum = 1; signum < 33; signum++) {
-		if (signal(signum, sigfwd) == SIG_IGN)
-			signal(signum, SIG_IGN);
-	}
-	signal(SIGHUP, sighup);
+
+	sigset_t old_sigmask;
+	signal_init(&old_sigmask);
 	pipe(logfd);
 	if ((childpid = fork())) {
 		close(0);
@@ -228,6 +224,7 @@ void daemon_main(int optind, char **argv) {
 		waitpid(childpid, NULL, 0);
 		pthread_join(logth, NULL);
 	} else if (!childpid) {
+		pthread_sigmask(SIG_SETMASK, &old_sigmask, NULL);
 		close(logfd[0]);
 		dup2(logfd[1], 1);
 		dup2(logfd[1], 2);
@@ -246,6 +243,64 @@ void daemon_main(int optind, char **argv) {
 	}
 	if (pidfp)
 		unlink(pidfile);
+}
+
+void signal_init(sigset_t* old_sigmask) {
+	sigset_t new_sigmask;
+	if(sigfillset(&new_sigmask)) {
+		perror("sigfillset");
+		exit(1);
+	}
+
+	size_t i;
+	int no_fwd_signals[] = {SIGFPE, SIGILL, SIGSEGV, SIGBUS, SIGABRT, SIGTRAP, SIGSYS};
+	for (i = 0; i < (sizeof(no_fwd_signals)/sizeof(no_fwd_signals[0])); i++) {
+		if(sigdelset(&new_sigmask, no_fwd_signals[i])) {
+			perror("sigdelset");
+			exit(1);
+		}
+	}
+
+	if(pthread_sigmask(SIG_SETMASK, &new_sigmask, old_sigmask)) {
+		perror("pthread_sigmask");
+		exit(1);
+	}
+
+	pthread_t signalth;
+	if(pthread_create(&signalth, NULL, signal_thread, &new_sigmask)) {
+		perror("pthread_create");
+		exit(1);
+	}
+}
+
+void *signal_thread(void* arg) {
+	sigset_t *sigmask = (sigset_t *)arg;
+
+	while (1) {
+		int signum;
+		if(sigwait(sigmask, &signum)) {
+			perror("sigwait");
+			exit(1);
+		}
+
+		if(signum == SIGHUP) {
+			pthread_mutex_lock(&logger_mutex);
+			if (logfp) {
+				FILE *fp = fopen(logfile, "a");
+				if (fp != NULL) {
+					fclose(logfp);
+					logfp = fp;
+					setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
+				}
+			}
+			pthread_mutex_unlock(&logger_mutex);
+			if (!nohup && childpid) // nonohup :~
+				kill(childpid, signum);
+		} else {
+			if (childpid)
+				kill(childpid, signum);
+		}
+	}
 }
 
 void *logger_thread(void *cmdname) {
@@ -287,26 +342,6 @@ void *logger_thread(void *cmdname) {
 	}
 	pthread_mutex_unlock(&logger_mutex);
 	return NULL;
-}
-
-void sighup(int signum) {
-	pthread_mutex_lock(&logger_mutex);
-	if (logfp) {
-		FILE *fp = fopen(logfile, "a");
-		if (fp != NULL) {
-			fclose(logfp);
-			logfp = fp;
-			setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
-		}
-	}
-	pthread_mutex_unlock(&logger_mutex);
-	if (!nohup && childpid) // nonohup :~
-		kill(childpid, signum);
-}
-
-void sigfwd(int signum) {
-	if (childpid)
-		kill(childpid, signum);
 }
 
 int exec_ok(char *filename) {
