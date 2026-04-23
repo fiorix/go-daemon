@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-VERSION=1.3
+VERSION=1.4
 
 PKG=go-daemon-$(VERSION)
 TGZ=$(PKG).tar.gz

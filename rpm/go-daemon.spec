@@ -2,7 +2,7 @@
 
 Summary: Daemonize other programs
 Name: go-daemon
-Version: 1.3
+Version: 1.4
 Release: 1
 License: BSD
 URL: https://github.com/fiorix/go-daemon
@@ -29,6 +29,11 @@ make DESTDIR=%{buildroot} install
 %{_bindir}/god
 
 %changelog
+* Thu Apr 23 2026 Alexandre Fiori <fiorix@gmail.com> 1.4
+- Fix signal handling (#15)
+- setsid() when daemonizing to make the daemon a session leader (#16)
+- Close logfile in child (#9)
+
 * Fri Apr 15 2016 Alexandre Fiori <fiorix@gmail.com> 1.3
 - Fix for detaching from terminal
 - Fix for privilege escalation due to weak privdrop

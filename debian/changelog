@@ -1,3 +1,11 @@
+go-daemon (1.4) unstable; urgency=low
+
+  * Fix signal handling (#15)
+  * setsid() when daemonizing to make the daemon a session leader (#16)
+  * Close logfile in child (#9)
+
+ -- Alexandre Fiori <fiorix@gmail.com>  Thu, 23 Apr 2026 00:07:59 +0100
+
 go-daemon (1.3) precise; urgency=low
 
   * Fix for detaching from terminal
