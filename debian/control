@@ -1,10 +1,10 @@
 Source: go-daemon
 Section: utils
-Priority: extra
+Priority: optional
 Maintainer: Alexandre Fiori <fiorix@gmail.com>
-Build-Depends: debhelper (>= 8.0.0)
-Standards-Version: 3.9.3
-Homepage: http://github.com/fiorix/go-daemon
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Homepage: https://github.com/fiorix/go-daemon
 
 Package: go-daemon
 Architecture: any

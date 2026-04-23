@@ -20,6 +20,6 @@ Build the package:
 Install it:
 
 	cd ..
-	dpkg -i go-daemon_1.0-1_<arch>.deb
+	dpkg -i go-daemon_<version>_<arch>.deb
 
 The package can be distributed and installed on other systems.

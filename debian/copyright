@@ -1,9 +1,9 @@
-Format: http://dep.debian.net/deps/dep5
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: go-daemon
-Source: http://github.com/fiorix/go-daemon
+Source: https://github.com/fiorix/go-daemon
 
 Files: *
-Copyright: 2013-2014 Alexandre Fiori <fiorix@gmail.com>
+Copyright: 2013-2026 Alexandre Fiori <fiorix@gmail.com>
 License: BSD-style
 
  Redistribution and use in source and binary forms, with or without

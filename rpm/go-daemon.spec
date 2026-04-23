@@ -5,11 +5,8 @@ Name: go-daemon
 Version: 1.3
 Release: 1
 License: BSD
-Group: Utilities
-URL: http://github.com/fiorix/go-daemon
-Packager: Alexandre Fiori <fiorix@gmail.com>
+URL: https://github.com/fiorix/go-daemon
 Source: %{name}-%{version}.tar.gz
-BuildRoot: %{_tmpdir}/%{name}-%{version}-%{release}
 BuildRequires: gcc
 BuildRequires: make
 

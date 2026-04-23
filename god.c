@@ -1,4 +1,4 @@
-// Copyright 2013-2016 Alexandre Fiori
+// Copyright 2013-2026 Alexandre Fiori
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,10 +38,9 @@ void usage() {
 	"-r --rundir DIR     switch to DIR before executing the program\n"
 	"-u --user USER      switch to USER before executing the program\n"
 	"-g --group GROUP    switch to GROUP before executing the program\n"
-	"\nThe program's output go to a blackhole if no logfile is set.\n"
+	"\nThe program's output goes to a blackhole if no logfile is set.\n"
 	"Log files are recycled on SIGHUP.\n"
 	);
-	exit(1);
 }
 
 static int nohup = 0;
@@ -87,14 +86,17 @@ int main(int argc, char **argv) {
 
 	int ch;
 	while (1) {
-		ch = getopt_long(argc, argv, "l:p:r:u:g:hvfns", opts, NULL);
+		ch = getopt_long(argc, argv, "l:p:r:u:g:hvfn", opts, NULL);
 		if (ch == -1)
 			break;
 
 		switch (ch) {
+			case 'h':
+				usage();
+				return 0;
 			case 'v':
 				printf("Go daemon %s\n", VERSION);
-				printf("http://github.com/fiorix/go-daemon\n");
+				printf("https://github.com/fiorix/go-daemon\n");
 				return 0;
 			case 'f':
 				foreground = 1;
@@ -119,12 +121,15 @@ int main(int argc, char **argv) {
 				break;
 			default:
 				usage();
+				return 1;
 		}
 	}
 
 	// utility is expected to be argv's leftovers.
-	if (optind >= argc)
+	if (optind >= argc) {
 		usage();
+		return 1;
+	}
 
 	if (*rundir != 0 && chdir(rundir) == -1) {
 		perror("failed to switch to rundir");
@@ -298,7 +303,8 @@ void *signal_thread(void* arg) {
 				}
 			}
 			pthread_mutex_unlock(&logger_mutex);
-			if (!nohup && childpid) // nonohup :~
+			// forward SIGHUP to child unless --nohup was given
+			if (!nohup && childpid)
 				kill(childpid, signum);
 		} else {
 			if (childpid)

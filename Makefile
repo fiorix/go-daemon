@@ -1,4 +1,4 @@
-# Copyright 2013-2014 Alexandre Fiori
+# Copyright 2013-2026 Alexandre Fiori
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,10 +7,12 @@ VERSION=1.3
 PKG=go-daemon-$(VERSION)
 TGZ=$(PKG).tar.gz
 
+CC ?= cc
+
 all: god
 
 god:
-	cc -Wall -DVERSION=\"$(VERSION)\" -o god god.c -lpthread
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Wall -DVERSION=\"$(VERSION)\" -o god god.c $(LDFLAGS) -pthread
 
 clean:
 	rm -f god $(TGZ)
@@ -22,4 +24,4 @@ install: god
 archive:
 	git archive --format tar --prefix=$(PKG)/ HEAD . | gzip > $(TGZ)
 
-.PHONY: god
+.PHONY: all clean install archive
