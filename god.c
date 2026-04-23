@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -20,6 +22,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 
 #ifndef VERSION
 #define VERSION "tip"
@@ -51,12 +57,13 @@ static FILE *pidfp = NULL;
 static char logfile[PATH_MAX];
 static char pidfile[PATH_MAX];
 static char linebuf[1024];
-static pthread_mutex_t logger_mutex;
+static pthread_mutex_t logger_mutex = PTHREAD_MUTEX_INITIALIZER;
+static sigset_t fwd_mask;
 
-void daemon_main(int optind, char **argv);
-void signal_init(sigset_t* old_sigmask);
-void *signal_thread(void* arg);
-void *logger_thread(void *cmdname);
+void daemon_main(int foreground, int optind, char **argv);
+void signal_setup(sigset_t *old_sigmask);
+void *signal_thread(void *arg);
+void *logger_thread(void *arg);
 char *exec_abspath(char *filename);
 
 int main(int argc, char **argv) {
@@ -137,28 +144,46 @@ int main(int argc, char **argv) {
 	}
 
 	struct passwd *pwd = NULL;
-	if ((*user && !(pwd = getpwnam(user)))) {
-		fprintf(stderr, "failed to get user %s: %s\n",
-				user, strerror(errno));
-		return 1;
+	if (*user) {
+		errno = 0;
+		if (!(pwd = getpwnam(user))) {
+			if (errno == 0)
+				fprintf(stderr, "user not found: %s\n", user);
+			else
+				fprintf(stderr, "failed to get user %s: %s\n",
+						user, strerror(errno));
+			return 1;
+		}
 	}
 
 	struct group *grp = NULL;
-	if ((*group && !(grp = getgrnam(group)))) {
-		fprintf(stderr, "failed to get group %s: %s\n",
-				group, strerror(errno));
-		return 1;
+	if (*group) {
+		errno = 0;
+		if (!(grp = getgrnam(group))) {
+			if (errno == 0)
+				fprintf(stderr, "group not found: %s\n", group);
+			else
+				fprintf(stderr, "failed to get group %s: %s\n",
+						group, strerror(errno));
+			return 1;
+		}
 	}
 
-	if (grp && setregid(grp->gr_gid, grp->gr_gid) == -1) {
-		fprintf(stderr, "failed to switch to group %s: %s\n",
-				group, strerror(errno));
-		return 1;
+	// Drop privileges. If --user is set without --group, use the user's
+	// primary group so we don't silently keep the caller's (often root) GID.
+	if (pwd || grp) {
+		gid_t tgid = grp ? grp->gr_gid : pwd->pw_gid;
+		if (setgroups(1, &tgid) == -1) {
+			fprintf(stderr, "failed to drop supplementary groups: %s\n",
+					strerror(errno));
+			return 1;
+		}
+		if (setregid(tgid, tgid) == -1) {
+			fprintf(stderr, "failed to set gid %u: %s\n",
+					(unsigned)tgid, strerror(errno));
+			return 1;
+		}
 	}
-
-	const gid_t gid = getgid();
-	setgroups(1, &gid);
-
 	if (pwd && setreuid(pwd->pw_uid, pwd->pw_uid) == -1) {
 		fprintf(stderr, "failed to switch to user %s: %s\n",
 				user, strerror(errno));
@@ -172,9 +197,17 @@ int main(int argc, char **argv) {
 	if (logfp)
 		setvbuf(logfp, linebuf, _IOLBF, sizeof linebuf);
 
-	if (*pidfile && (pidfp = fopen(pidfile, "w+")) == NULL) {
-		perror("failed to open pidfile");
-		return 1;
+	if (*pidfile) {
+		char pidtmp[PATH_MAX + 8];
+		int n = snprintf(pidtmp, sizeof pidtmp, "%s.tmp", pidfile);
+		if (n < 0 || (size_t)n >= sizeof pidtmp) {
+			fprintf(stderr, "pidfile path too long\n");
+			return 1;
+		}
+		if ((pidfp = fopen(pidtmp, "w")) == NULL) {
+			perror("failed to open pidfile");
+			return 1;
+		}
 	}
 
 	char *abspath;
@@ -184,8 +217,8 @@ int main(int argc, char **argv) {
 	}
 	argv[optind] = abspath;
 
-        if (foreground) {
-                daemon_main(optind, argv);
+	if (foreground) {
+		daemon_main(1, optind, argv);
 		return 0;
 	}
 
@@ -194,14 +227,14 @@ int main(int argc, char **argv) {
 	if (pid > 0) {
 		waitpid(pid, NULL, 0);
 	} else if (!pid) {
-		if(setsid() < 0) {
+		if (setsid() < 0) {
 			perror("setsid");
 			exit(1);
 		}
 		if ((pid = fork()) > 0) {
 			exit(0);
 		} else if (!pid) {
-			daemon_main(optind, argv);
+			daemon_main(0, optind, argv);
 		} else {
 			perror("fork");
 			exit(1);
@@ -214,85 +247,175 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-void daemon_main(int optind, char **argv) {
-	if (pidfp) {
+static void write_execerr(const char *prog, int err) {
+	FILE *fp = NULL;
+	int close_fp = 0;
+	if (*logfile) {
+		fp = fopen(logfile, "a");
+		close_fp = 1;
+	}
+	if (!fp)
+		fp = stderr; // only useful in foreground; /dev/null otherwise
+	fprintf(fp, "%s: %s\n", prog, strerror(err));
+	if (close_fp)
+		fclose(fp);
+}
+
+void daemon_main(int foreground, int optind, char **argv) {
+	// Commit the pidfile atomically: write to <pidfile>.tmp, fsync, rename.
+	if (*pidfile && pidfp) {
+		char pidtmp[PATH_MAX + 8];
+		snprintf(pidtmp, sizeof pidtmp, "%s.tmp", pidfile);
 		fprintf(pidfp, "%d\n", getpid());
+		fflush(pidfp);
+		fsync(fileno(pidfp));
 		fclose(pidfp);
+		pidfp = NULL;
+		if (rename(pidtmp, pidfile) != 0)
+			unlink(pidtmp);
 	}
 
 	sigset_t old_sigmask;
-	signal_init(&old_sigmask);
-	pipe(logfd);
-	if ((childpid = fork()) > 0) {
-		close(0);
-		close(1);
-		close(2);
+	signal_setup(&old_sigmask);
+
+	int errfd[2];
+	if (pipe2(errfd, O_CLOEXEC) < 0) {
+		perror("pipe");
+		if (*pidfile) unlink(pidfile);
+		exit(1);
+	}
+	if (pipe2(logfd, O_CLOEXEC) < 0) {
+		perror("pipe");
+		close(errfd[0]); close(errfd[1]);
+		if (*pidfile) unlink(pidfile);
+		exit(1);
+	}
+
+	childpid = fork();
+	if (childpid > 0) {
+		// Supervisor.
+		close(errfd[1]);
 		close(logfd[1]);
-		pthread_t logth;
-		pthread_create(&logth, NULL, logger_thread, argv[optind]);
-		waitpid(childpid, NULL, 0);
-		pthread_join(logth, NULL);
-	} else if (!childpid) {
-		pthread_sigmask(SIG_SETMASK, &old_sigmask, NULL);
-		close(logfd[0]);
-		dup2(logfd[1], 1);
-		dup2(logfd[1], 2);
-		if (logfp) {
-			fclose(logfp);
+
+		if (!foreground) {
+			int devnull = open("/dev/null", O_RDWR);
+			if (devnull >= 0) {
+				dup2(devnull, 0);
+				dup2(devnull, 1);
+				dup2(devnull, 2);
+				if (devnull > 2) close(devnull);
+			}
 		}
-		execvp(argv[optind], argv + optind);
-		printf("\x1b%s", strerror(errno));
-		fflush(stdout);
-		close(logfd[1]);
-		close(1);
-		close(2);
-	} else {
-		perror("fork");
-		exit(1);
-	}
-	if (pidfp)
-		unlink(pidfile);
-}
 
-void signal_init(sigset_t* old_sigmask) {
-	sigset_t new_sigmask;
-	if(sigfillset(&new_sigmask)) {
-		perror("sigfillset");
-		exit(1);
-	}
-
-	size_t i;
-	int no_fwd_signals[] = {SIGFPE, SIGILL, SIGSEGV, SIGBUS, SIGABRT, SIGTRAP, SIGSYS};
-	for (i = 0; i < (sizeof(no_fwd_signals)/sizeof(no_fwd_signals[0])); i++) {
-		if(sigdelset(&new_sigmask, no_fwd_signals[i])) {
-			perror("sigdelset");
+		pthread_t sigth;
+		if (pthread_create(&sigth, NULL, signal_thread, NULL) != 0) {
+			perror("pthread_create signal");
+			kill(-childpid, SIGKILL);
+			waitpid(childpid, NULL, 0);
+			if (*pidfile) unlink(pidfile);
 			exit(1);
 		}
-	}
+		pthread_detach(sigth);
 
-	if(pthread_sigmask(SIG_SETMASK, &new_sigmask, old_sigmask)) {
+		pthread_t logth;
+		int have_logth = (pthread_create(&logth, NULL, logger_thread, NULL) == 0);
+		if (!have_logth) {
+			// Log thread failed: drop the read end so the child's
+			// writes fail fast instead of blocking on a full pipe.
+			close(logfd[0]);
+		}
+
+		int execerr = 0;
+		ssize_t nerr = read(errfd[0], &execerr, sizeof execerr);
+		close(errfd[0]);
+
+		waitpid(childpid, NULL, 0);
+		if (have_logth)
+			pthread_join(logth, NULL);
+
+		if (nerr == (ssize_t)sizeof execerr)
+			write_execerr(argv[optind], execerr);
+
+		if (*pidfile) unlink(pidfile);
+		return;
+	}
+	if (childpid == 0) {
+		// Child: restore signal mask, become process-group leader,
+		// ask the kernel to signal us if the supervisor dies.
+		int rc = pthread_sigmask(SIG_SETMASK, &old_sigmask, NULL);
+		if (rc != 0) {
+			(void)write(errfd[1], &rc, sizeof rc);
+			_exit(127);
+		}
+		if (setpgid(0, 0) != 0) {
+			int err = errno;
+			(void)write(errfd[1], &err, sizeof err);
+			_exit(127);
+		}
+#ifdef __linux__
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+		// Close the race: if the supervisor already exited, we won't
+		// receive the pdeathsig; bail out so we don't orphan.
+		if (getppid() == 1)
+			_exit(0);
+#endif
+		close(errfd[0]);
+		close(logfd[0]);
+		if (dup2(logfd[1], 1) < 0 || dup2(logfd[1], 2) < 0) {
+			int err = errno;
+			(void)write(errfd[1], &err, sizeof err);
+			_exit(127);
+		}
+		close(logfd[1]);
+		if (logfp) {
+			fclose(logfp);
+			logfp = NULL;
+		}
+
+		execvp(argv[optind], argv + optind);
+		int err = errno;
+		(void)write(errfd[1], &err, sizeof err);
+		close(errfd[1]);
+		_exit(127);
+	}
+	perror("fork");
+	close(errfd[0]); close(errfd[1]);
+	close(logfd[0]); close(logfd[1]);
+	if (*pidfile) unlink(pidfile);
+	exit(1);
+}
+
+// signal_setup blocks the signals we want to forward to the child so they
+// can be consumed by signal_thread via sigwait. SIGPIPE is blocked so a
+// broken logfile write doesn't kill the supervisor. Signals not listed
+// here keep their default disposition.
+void signal_setup(sigset_t *old_sigmask) {
+	static const int fwd_signals[] = {
+		SIGHUP, SIGINT, SIGQUIT, SIGTERM,
+		SIGUSR1, SIGUSR2, SIGTSTP, SIGCONT,
+	};
+	sigemptyset(&fwd_mask);
+	for (size_t i = 0; i < sizeof fwd_signals / sizeof fwd_signals[0]; i++)
+		sigaddset(&fwd_mask, fwd_signals[i]);
+
+	sigset_t block_mask = fwd_mask;
+	sigaddset(&block_mask, SIGPIPE);
+	if (pthread_sigmask(SIG_BLOCK, &block_mask, old_sigmask) != 0) {
 		perror("pthread_sigmask");
 		exit(1);
 	}
-
-	pthread_t signalth;
-	if(pthread_create(&signalth, NULL, signal_thread, &new_sigmask)) {
-		perror("pthread_create");
-		exit(1);
-	}
 }
 
-void *signal_thread(void* arg) {
-	sigset_t *sigmask = (sigset_t *)arg;
-
+void *signal_thread(void *arg) {
+	(void)arg;
 	while (1) {
 		int signum;
-		if(sigwait(sigmask, &signum)) {
+		if (sigwait(&fwd_mask, &signum) != 0) {
 			perror("sigwait");
-			exit(1);
+			return NULL;
 		}
 
-		if(signum == SIGHUP) {
+		if (signum == SIGHUP) {
 			pthread_mutex_lock(&logger_mutex);
 			if (logfp) {
 				FILE *fp = fopen(logfile, "a");
@@ -303,52 +426,35 @@ void *signal_thread(void* arg) {
 				}
 			}
 			pthread_mutex_unlock(&logger_mutex);
-			// forward SIGHUP to child unless --nohup was given
-			if (!nohup && childpid)
-				kill(childpid, signum);
-		} else {
-			if (childpid)
-				kill(childpid, signum);
+			if (nohup)
+				continue;
 		}
+		if (childpid > 0)
+			kill(-childpid, signum);
 	}
 }
 
-void *logger_thread(void *cmdname) {
-	int n;
+void *logger_thread(void *arg) {
+	(void)arg;
 	char buf[4096];
-	int has_read = 0;
 
-	while(1) {
-		// read() will fail when the child process fails
-		// to execute or dies, and closes its terminal.
-		// This is what terminates this thread and therefore
-		// the main thread can move along.
-		n = read(logfd[0], buf, sizeof buf);
+	// read() returns 0 when the child closes its end of the pipe (dies or
+	// fails to exec after we duped logfd[1] to its stdout/stderr). That
+	// terminates this thread and the supervisor moves on.
+	for (;;) {
+		ssize_t n = read(logfd[0], buf, sizeof buf);
 		if (n <= 0)
 			break;
-
-		buf[n] = 0;
-		if (!has_read) {
-			has_read = 1;
-			if (*buf == '\x1b') {
-				char *p = buf;
-				printf("%s: %s\n", (char *) cmdname, ++p);
-				close(logfd[0]);
-				break;
-			}
-		}
-
 		pthread_mutex_lock(&logger_mutex);
-		if (logfp) {
-			fwrite(buf, 1, n, logfp);
-			//fflush(logfp);
-		}
+		if (logfp)
+			fwrite(buf, 1, (size_t)n, logfp);
 		pthread_mutex_unlock(&logger_mutex);
 	}
 	pthread_mutex_lock(&logger_mutex);
 	if (logfp) {
 		fflush(logfp);
 		fclose(logfp);
+		logfp = NULL;
 	}
 	pthread_mutex_unlock(&logger_mutex);
 	return NULL;
@@ -385,7 +491,7 @@ char *exec_abspath(char *filename) {
 		return NULL;
 	}
 
-	if (*filename == '.' || *filename == '/') {
+	if (strchr(filename, '/')) {
 		switch (exec_ok(filename)) {
 		case  1: return realpath(filename, abspath);
 		default: return NULL;
