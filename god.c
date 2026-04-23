@@ -501,27 +501,40 @@ char *exec_abspath(char *filename) {
 	char *path = getenv("PATH");
 	if (!path) return NULL;
 
-	char *v[(PATH_MAX/2)], **paths = v;
 	char *p = strdup(path);
+	if (!p)
+		return NULL;
 	path = p;
 
-	while (*p) {
-		while (*p && *p == ':') *p++ = 0;
-		if (*p) *(paths++) = p;
-		while (*p && *p != ':') p++;
-	}
-	*paths = NULL;
+	size_t fnlen = strlen(filename);
 
-	int l, fnlen = strlen(filename);
-	for (paths = v; *paths; paths++) {
-		l = strlen(*paths) + fnlen + 2;
-		if (l > sizeof(abspath)) continue;
-		snprintf(abspath, l, "%s/%s", *paths, filename);
-		if (exec_ok(abspath)) {
-			free(path);
-			return abspath;
+	while (*p) {
+		while (*p && *p == ':')
+			p++;
+		if (!*p)
+			break;
+
+		char *segment = p;
+		while (*p && *p != ':')
+			p++;
+
+		char saved = *p;
+		*p = '\0';
+
+		size_t l = strlen(segment) + fnlen + 2;
+		if (l <= sizeof(abspath)) {
+			snprintf(abspath, l, "%s/%s", segment, filename);
+			if (exec_ok(abspath)) {
+				free(path);
+				return abspath;
+			}
 		}
+
+		if (saved == '\0')
+			break;
+		p++;
 	}
+
 	free(path);
 	return NULL;
 }
