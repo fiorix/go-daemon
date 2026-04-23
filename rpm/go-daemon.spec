@@ -2,7 +2,7 @@
 
 Summary: Daemonize other programs
 Name: go-daemon
-Version: 1.4
+Version: 1.5
 Release: 1
 License: BSD
 URL: https://github.com/fiorix/go-daemon
@@ -29,6 +29,17 @@ make DESTDIR=%{buildroot} install
 %{_bindir}/god
 
 %changelog
+* Thu Apr 23 2026 Alexandre Fiori <fiorix@gmail.com> 1.5
+- Harden privilege drop: check setgroups return; use user's primary
+  gid when --group is omitted
+- Fix dangling sigset_t pointer used by the signal thread
+- Replace \x1b exec-error sentinel with an O_CLOEXEC error pipe
+- Fix 1-byte stack overflow in the logger thread
+- Atomic pidfile write (tmp + fsync + rename)
+- prctl(PR_SET_PDEATHSIG, SIGTERM) so the child dies if the supervisor
+  is killed
+- Forward signals to the child's process group
+
 * Thu Apr 23 2026 Alexandre Fiori <fiorix@gmail.com> 1.4
 - Fix signal handling (#15)
 - setsid() when daemonizing to make the daemon a session leader (#16)

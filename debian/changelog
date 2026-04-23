@@ -1,3 +1,17 @@
+go-daemon (1.5) unstable; urgency=low
+
+  * Harden privilege drop: check setgroups return; use user's primary
+    gid when --group is omitted
+  * Fix dangling sigset_t pointer used by the signal thread
+  * Replace \x1b exec-error sentinel with an O_CLOEXEC error pipe
+  * Fix 1-byte stack overflow in the logger thread
+  * Atomic pidfile write (tmp + fsync + rename)
+  * prctl(PR_SET_PDEATHSIG, SIGTERM) so the child dies if the
+    supervisor is killed
+  * Forward signals to the child's process group
+
+ -- Alexandre Fiori <fiorix@gmail.com>  Thu, 23 Apr 2026 01:51:27 +0100
+
 go-daemon (1.4) unstable; urgency=low
 
   * Fix signal handling (#15)
